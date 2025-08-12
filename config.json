@@ -1,0 +1,17 @@
+{
+	"PAYLOAD_TYPE": {
+		"PING": 0,
+		"ACK": 1,
+		"HISTORICAL_BEGIN": 2,
+		"HISTORICAL_DATA": 3,
+		"HISTORICAL_END": 4,
+		"REALTIME_BEGIN": 5,
+		"REALTIME_DATA": 6,
+		"REALTIME_END": 7
+	},
+	"TCP": {
+		"HOST": "127.0.0.1",
+		"PORT": 9000,
+		"HEADER_FORMAT": "!I"
+	}
+}
