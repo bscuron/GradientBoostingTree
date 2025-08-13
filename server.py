@@ -27,7 +27,7 @@ def main(CONFIG: SimpleNamespace):
                 print(f'[INFO] Client connection lost')
                 break
 
-            print(f'[INFO] Client payload received: {payload}')
+            # print(f'[INFO] Client payload received: {payload}')
             handler.handle(payload)
             send(conn, json.dumps({ 'type': PAYLOAD_TYPE.ACK }))
 
