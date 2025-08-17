@@ -1,11 +1,14 @@
-import handler
+import ml
 import json
 import socket
 import struct
+import joblib
+import pandas as pd
 from types import SimpleNamespace
 
 TCP, PAYLOAD_TYPE = None, None
 sock, conn = None, None
+model, data, lookback_period = None, [], 10
 
 def main(CONFIG: SimpleNamespace):
     global TCP, PAYLOAD_TYPE
@@ -27,9 +30,8 @@ def main(CONFIG: SimpleNamespace):
                 print(f'[INFO] Client connection lost')
                 break
 
-            # print(f'[INFO] Client payload received: {payload}')
-            handler.handle(payload)
-            send(conn, json.dumps({ 'type': PAYLOAD_TYPE.ACK }))
+            print(f'[INFO] Client payload received: {payload}')
+            handle(conn, payload)
 
 def accept(sock: socket.socket):
     print(f'[INFO] Waiting for client connection...')
@@ -59,8 +61,39 @@ def receive(conn: socket.socket) -> dict:
         while len(payload) < n:
             payload += conn.recv(n - len(payload))
         return payload
-    header_bytes = recv_all(struct.calcsize(TCP.HEADER_FORMAT)) # TODO: cache header size
+    header_bytes = recv_all(struct.calcsize(TCP.HEADER_FORMAT))
     payload_size = struct.unpack(TCP.HEADER_FORMAT, header_bytes)[0]
     payload = recv_all(payload_size)
     return json.loads(payload.decode('utf-8'))
 
+def handle(conn: socket.socket, payload: dict):
+    global data, model
+
+    match payload.get('type'):
+        case PAYLOAD_TYPE.TRAIN_DATA:
+            data.append(payload)
+        case PAYLOAD_TYPE.DATA:
+            data.append(payload)
+            if not model:
+                print('[INFO] Loading model...')
+                model = joblib.load('./model.pkl')
+                print('[INFO] Model loaded')
+            if len(data) > lookback_period:
+                df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
+                if not df.empty:
+                    pred_class = model.predict(df.iloc[[-1]])[0]
+                    print(f'[INFO] Prediction: {pred_class}')
+                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': int(pred_class)}))
+                else:
+                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': 0 }))
+            else:
+                send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': 0 }))
+        case PAYLOAD_TYPE.TRAIN_START:
+            print(f'[INFO] Starting training...')
+            model = ml.train(data, lookback_period=lookback_period)
+            print(f'[INFO] Training finished')
+            if payload.get('save'):
+                print(f'[INFO] Saving model...')
+                joblib.dump(model, 'model.pkl')
+                print(f'[INFO] Model saved')
+            send(conn, json.dumps({ 'type': PAYLOAD_TYPE.TRAIN_END }))

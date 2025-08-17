@@ -1,9 +1,11 @@
 {
 	"PAYLOAD_TYPE": {
-		"PING": 0,
-		"ACK": 1,
-		"ROW": 2,
-		"TRAIN": 3
+		"ACK": 0,
+		"TRAIN_START": 1,
+		"TRAIN_END": 2,
+		"TRAIN_DATA": 3,
+		"DATA": 4,
+		"PRED": 5
 	},
 	"TCP": {
 		"HOST": "127.0.0.1",

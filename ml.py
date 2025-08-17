@@ -1,20 +1,18 @@
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
 
-def train(data=None):
-    X_raw = pd.DataFrame(data)
-    print(f'[INFO] Training Data: {X_raw}')
-    lookback_period = 5
-    X = lookback(preprocess(X_raw), period=lookback_period)
-    print(f'[INFO] Training Data (Normalized): {X}')
-    y = find_swings(X_raw, 5).iloc[lookback_period:].reset_index(drop=True)
-
+def train(data=None, lookback_period=5):
+    df_unprocessed = pd.DataFrame(data)
+    print(f'[INFO] Training Data: {df_unprocessed}')
+    df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
+    print(f'[INFO] Features: {df_processed.columns}')
+    print(f'[INFO] Training Data (Normalized): {df_processed}')
+    df_labels = find_swings(df_unprocessed, 10).iloc[lookback_period:].reset_index(drop=True)
     X_train, X_valid, y_train, y_valid = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        df_processed, df_labels, test_size=0.2, random_state=42, shuffle=False
     )
 
     class_counts = y_train.value_counts().to_dict()
@@ -47,7 +45,7 @@ def train(data=None):
     print(classification_report(y_valid, pred, target_names=['No Swing', 'Swing High', 'Swing Low']))
 
     importances = model.feature_importances_
-    feature_names = X_train.columns  # X_train used to train the model
+    feature_names = X_train.columns
     feat_df = pd.DataFrame({
         'feature': feature_names,
         'importance': importances
@@ -55,11 +53,18 @@ def train(data=None):
     print(feat_df)
     return model
 
-def lookback(df: pd.DataFrame, period: int = 10) -> pd.DataFrame:
+def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:
     dfc = df.copy()
+    lagged_cols = []
+
     for col in df.columns:
         for lag in range(1, period + 1):
-            dfc[f'{col}{lag}'] = df[col].shift(lag)
+            lagged_cols.append(df[col].shift(lag).rename(f'{col}_{lag}'))
+
+    if lagged_cols:
+        df_lags = pd.concat(lagged_cols, axis=1)
+        dfc = pd.concat([dfc, df_lags], axis=1)
+
     dfc = dfc.dropna().reset_index(drop=True)
     return dfc
 
@@ -77,6 +82,5 @@ def find_swings(data, strength=5):
     return pd.Series(labels, name='label')
 
 def preprocess(data: pd.DataFrame) -> pd.DataFrame:
-    data_numeric = (data.drop(['type', 'time'], axis=1)
-                    .pipe(lambda df: (df - df.mean()) / df.std()))
+    data_numeric = data.drop(['type', 'time', 'high', 'low', 'close'], axis=1)
     return pd.concat([data_numeric], axis=1)
