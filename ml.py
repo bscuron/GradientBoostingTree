@@ -10,7 +10,7 @@ def train(data=None, lookback_period=5):
     df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
     print(f'[INFO] Features: {df_processed.columns}')
     print(f'[INFO] Training Data (Normalized): {df_processed}')
-    df_labels = find_swings(df_unprocessed, 10).iloc[lookback_period:].reset_index(drop=True)
+    df_labels = find_swings(df_unprocessed, 25).iloc[lookback_period:].reset_index(drop=True)
     X_train, X_valid, y_train, y_valid = train_test_split(
         df_processed, df_labels, test_size=0.2, random_state=42, shuffle=False
     )
@@ -22,7 +22,7 @@ def train(data=None, lookback_period=5):
         objective='multiclass',
         num_class=3,
         n_estimators=int(25e3),
-        learning_rate=0.01,
+        learning_rate=0.1,
         num_leaves=31,
         subsample=0.8,
         class_weight=class_weight,

@@ -38,9 +38,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private Dictionary<string, object> PAYLOAD_TYPE;
 		private int HISTORICAL_BARS_COUNT;
 		private TcpClient client;
-		private WilliamsR williamsR14;
-		private ROC roc14;
-		private VROC vroc14;
+		private WilliamsR williamsR;
+		private ROC roc;
+		private VROC vroc;
+		private RSI rsi;
+		private StochRSI stochRSI;
+		private Stochastics stoch;
+		private StochasticsFast stochFast;
+		private MACD macd;
 
 		protected override void OnStateChange()
 		{
@@ -64,15 +69,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 					TraceOrders									= false;
 					RealtimeErrorHandling						= RealtimeErrorHandling.StopCancelClose;
 					StopTargetHandling							= StopTargetHandling.PerEntryExecution;
-					BarsRequiredToTrade							= 14;
+					BarsRequiredToTrade							= 26;
 					IsInstantiatedOnEachOptimizationIteration	= true;
 					TrainModel = true;
 					SaveModel = true;
 					break;
 				case State.Configure:
-					williamsR14 = WilliamsR(14);
-					roc14 = ROC(14);
-					vroc14 = VROC(14, 3);
+					williamsR = WilliamsR(14);
+					roc = ROC(14);
+					vroc = VROC(14, 3);
+					rsi = RSI(14, 3);
+					stochRSI = StochRSI(14);
+					stoch = Stochastics(7, 14, 3);
+					stochFast = StochasticsFast(3, 14);
+					macd = MACD(12, 26, 9);
 					break;
 				case State.Active: break;
 				case State.DataLoaded:
@@ -109,6 +119,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 			}
 			if (TrainingStarted) return;
 
+			double eps = 1e-6;
+			double candle_body = Close[0] - Open[0] + eps;
+			double candle_body_size = Math.Abs(candle_body);
+			double candle_upperwick = High[0] - Math.Max(Open[0], Close[0]);
+			double candle_lowerwick = Math.Min(Open[0], Close[0]) - Low[0] + eps;
+			double candle_range = High[0] - Low[0] + eps;
+			double candle_direction = Math.Sign(candle_body);
 			var message = new {
 				type = Convert.ToInt32(PAYLOAD_TYPE[TrainModel ? "TRAIN_DATA" : "DATA"]),
 				time = ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
@@ -116,14 +133,34 @@ namespace NinjaTrader.NinjaScript.Strategies
 				low = Low[0],
 				close = Close[0],
 
-				body = Math.Abs(Close[0] - Open[0]),
-				upperwick = High[0] - Math.Max(Open[0], Close[0]),
-				lowerwick = Math.Min(Open[0], Close[0]) - Low[0],
-				volume = Volume[0],
-				volumedelta = Volume[0] - Volume[1],
-				williamsR14 = williamsR14[0],
-				roc14 = roc14[0],
-				vroc14 = vroc14[0],
+				candle_body_size = candle_body_size,
+				candle_range = candle_range,
+				candle_body_to_range_ratio = candle_body_size / candle_range,
+				candle_upperwick = candle_upperwick,
+				candle_lowerwick = candle_lowerwick,
+				candle_body_to_wick_ratio = candle_body_size / (candle_upperwick + candle_lowerwick),
+				candle_body_to_volume_ratio = candle_body_size / Volume[0],
+				candle_wick_ratio = candle_upperwick / candle_lowerwick,
+				candle_wick_to_range_ratio = (candle_upperwick + candle_lowerwick) / candle_range,
+				candle_upperwick_to_range_ratio = candle_upperwick / candle_range,
+				candle_lowerwick_to_range_ratio = candle_lowerwick / candle_range,
+				candle_wick_to_volume_ratio = (candle_upperwick + candle_lowerwick) / Volume[0],
+				candle_upperwick_to_volume_ratio = candle_upperwick / Volume[0],
+				candle_lowerwick_to_volume_ratio = candle_lowerwick / Volume[0],
+				indicator_williamsR = williamsR[0]
+
+				// indicator_volume = Volume[0],
+				// indicator_volumedelta = Volume[0] - Volume[1],
+				// indicator_roc = roc[0],
+				// indicator_vroc = vroc[0],
+				// indicator_rsi = rsi[0],
+				// indicator_stochRSI = stochRSI[0],
+				// indicator_stochK = stoch.K[0],
+				// indicator_stochD = stoch.D[0],
+				// indicator_stochFastK = stochFast.K[0],
+				// indicator_stochFastD = stochFast.D[0],
+				// indicator_macdAvg = macd.Avg[0],
+				// indicator_macdDiff = macd.Diff[0]
 			};
 			// Print($"[INFO] Sending message: {message}");
 			Send(client, message);
@@ -138,17 +175,15 @@ namespace NinjaTrader.NinjaScript.Strategies
 					Print($"[INFO] Prediction: {pred}");
 					if (pred == 1)
 					{
-						SetStopLoss(CalculationMode.Ticks, ATR(14)[0] * 0.5 / TickSize);
-						SetProfitTarget(CalculationMode.Ticks, ATR(14)[0] * 3 / TickSize);
+						ExitLong();
 						EnterShort();
-						Draw.VerticalLine(this, CurrentBar.ToString(), 0, Brushes.Red);
+						Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.White);
 					}
 					else if (pred == 2)
 					{
-						SetStopLoss(CalculationMode.Ticks, ATR(14)[0] * 0.5 / TickSize);
-						SetProfitTarget(CalculationMode.Ticks, ATR(14)[0] * 1.5 / TickSize);
+						ExitShort();
 						EnterLong();
-						Draw.VerticalLine(this, CurrentBar.ToString(), 0, Brushes.Green);
+						Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.White);
 					}
 				}
 			}

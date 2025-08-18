@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 TCP, PAYLOAD_TYPE = None, None
 sock, conn = None, None
-model, data, lookback_period = None, [], 10
+model, data, lookback_period = None, [], 50
 
 def main(CONFIG: SimpleNamespace):
     global TCP, PAYLOAD_TYPE
@@ -30,7 +30,7 @@ def main(CONFIG: SimpleNamespace):
                 print(f'[INFO] Client connection lost')
                 break
 
-            print(f'[INFO] Client payload received: {payload}')
+            # print(f'[INFO] Client payload received: {payload}')
             handle(conn, payload)
 
 def accept(sock: socket.socket):
@@ -79,6 +79,7 @@ def handle(conn: socket.socket, payload: dict):
                 model = joblib.load('./model.pkl')
                 print('[INFO] Model loaded')
             if len(data) > lookback_period:
+                data = data[-(lookback_period+1):]
                 df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
                 if not df.empty:
                     pred_class = model.predict(df.iloc[[-1]])[0]
