@@ -80,6 +80,7 @@ def handle(conn: socket.socket, payload: dict):
                 print('[INFO] Model loaded')
             if len(data) > lookback_period:
                 data = data[-(lookback_period+1):]
+                # TODO: bad, dont reconstruct dataframe for each prediction
                 df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
                 if not df.empty:
                     pred_class = model.predict(df.iloc[[-1]])[0]
