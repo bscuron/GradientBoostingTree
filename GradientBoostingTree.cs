@@ -38,7 +38,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private Dictionary<string, object> PAYLOAD_TYPE;
 		private int HISTORICAL_BARS_COUNT;
 		private TcpClient client;
-		private Indicators._The_Indicator_Store.TIS_PRC_v2c prc;
+		// private Indicators._The_Indicator_Store.TIS_PRC_v2c prc;
 		private WilliamsR williamsR;
 		private SMA sma10;
 		private SMA sma20;
@@ -72,7 +72,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					SaveModel = true;
 					break;
 				case State.Configure:
-					prc = TIS_PRC_v2c(3, 100, 1.62, 2);
+					// prc = TIS_PRC_v2c(3, 100, 1.62, 2);
 					williamsR = WilliamsR(14);
 					sma10 = SMA(10);
 					sma20 = SMA(20);
@@ -142,11 +142,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 				candle_upperwick_to_volume_ratio = candle_upperwick / Volume[0],
 				candle_lowerwick_to_volume_ratio = candle_lowerwick / Volume[0],
 
-				indicator_prc_fx = Close[0] - prc.Fx[0],
-				indicator_prc_sqh = Close[0] - prc.Sqh[0],
-				indicator_prc_sqh2 = Close[0] - prc.Sqh2[0],
-				indicator_prc_sql = Close[0] - prc.Sql[0],
-				indicator_prc_sql2 = Close[0] - prc.Sql2[0],
+				// indicator_prc_fx = Close[0] - prc.Fx[0],
+				// indicator_prc_sqh = Close[0] - prc.Sqh[0],
+				// indicator_prc_sqh2 = Close[0] - prc.Sqh2[0],
+				// indicator_prc_sql = Close[0] - prc.Sql[0],
+				// indicator_prc_sql2 = Close[0] - prc.Sql2[0],
 
 				indicator_williamsR = williamsR[0],
 
