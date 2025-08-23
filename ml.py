@@ -13,7 +13,7 @@ def train(data=None, lookback_period=5, undersample_ratio=3):
     
     df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
     print(f'[INFO] Features: {df_processed.columns}')
-    print(f'[INFO] Training Data (Normalized): {df_processed}')
+    print(f'[INFO] Training Data (Processed): {df_processed}')
     
     df_labels = find_swings(df_unprocessed, 25).iloc[lookback_period:].reset_index(drop=True)
     

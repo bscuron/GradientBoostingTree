@@ -31,7 +31,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 	public class GradientBoostingTree : Strategy
 	{
 
-		private const string CONFIG_PATH = @"C:\Users\bscur\Documents\projects\GradientBoostingTree\config.json";
+		private string CONFIG_PATH = System.Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\projects\GradientBoostingTree\config.json");
 		private bool TrainingStarted = false;
 		private Dictionary<string, object> CONFIG;
 		private Dictionary<string, object> TCP;
