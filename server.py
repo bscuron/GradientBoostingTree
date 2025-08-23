@@ -83,9 +83,9 @@ def handle(conn: socket.socket, payload: dict):
                 # TODO: bad, dont reconstruct dataframe for each prediction
                 df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
                 if not df.empty:
-                    pred_class = model.predict(df.iloc[[-1]])[0]
+                    pred_class = int(model.predict(df.iloc[[-1]])[0])
                     print(f'[INFO] Prediction: {pred_class}')
-                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': int(pred_class)}))
+                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': pred_class}))
                 else:
                     send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': 0 }))
             else:

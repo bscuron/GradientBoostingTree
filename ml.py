@@ -4,53 +4,70 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
 
-def train(data=None, lookback_period=5):
+from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
+from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+
+def train(data=None, lookback_period=5, undersample_ratio=3):
     df_unprocessed = pd.DataFrame(data)
     print(f'[INFO] Training Data: {df_unprocessed}')
+    
     df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
     print(f'[INFO] Features: {df_processed.columns}')
     print(f'[INFO] Training Data (Normalized): {df_processed}')
+    
     df_labels = find_swings(df_unprocessed, 25).iloc[lookback_period:].reset_index(drop=True)
-    X_train, X_valid, y_train, y_valid = train_test_split(
-        df_processed, df_labels, test_size=0.2, random_state=42, shuffle=False
-    )
-
+    
+    df_train = pd.concat([df_processed, df_labels], axis=1)
+    
+    df_train_major = df_train[df_train.label == 0]
+    df_train_minor = df_train[df_train.label != 0]
+    
+    n_major_sample = min(len(df_train_major), len(df_train_minor) * undersample_ratio)
+    df_train_major_sampled = df_train_major.sample(n=n_major_sample, random_state=42)
+    
+    df_train_balanced = pd.concat([df_train_minor, df_train_major_sampled]).sort_index().reset_index(drop=True)
+    
+    X_train_balanced = df_train_balanced.drop('label', axis=1)
+    y_train_balanced = df_train_balanced['label']
+    
+    split_idx = int(len(X_train_balanced) * 0.8)
+    X_train, X_valid = X_train_balanced.iloc[:split_idx], X_train_balanced.iloc[split_idx:]
+    y_train, y_valid = y_train_balanced.iloc[:split_idx], y_train_balanced.iloc[split_idx:]
+    
     class_counts = y_train.value_counts().to_dict()
     max_count = max(class_counts.values())
-    class_weight = {cls: int(max_count / count) for cls, count in class_counts.items()}
+    
     model = LGBMClassifier(
         objective='multiclass',
         num_class=3,
         n_estimators=int(25e3),
-        learning_rate=0.1,
+        class_weight={0:10, 1:1, 2:1},
+        learning_rate=0.05,
         num_leaves=31,
         subsample=0.8,
-        class_weight=class_weight,
         colsample_bytree=0.8,
         random_state=42
     )
-
+    
     model.fit(
         X_train, y_train,
         eval_set=[(X_valid, y_valid)],
         eval_metric='multi_logloss',
         callbacks=[early_stopping(stopping_rounds=50), log_evaluation(period=50)],
     )
-
+    
     pred = model.predict(X_valid)
     proba = model.predict_proba(X_valid)
     print(proba)
     print(accuracy_score(y_valid, pred))
     print(roc_auc_score(y_valid, proba, multi_class='ovr'))
     print(classification_report(y_valid, pred, target_names=['No Swing', 'Swing High', 'Swing Low']))
-
+    
     importances = model.feature_importances_
     feature_names = X_train.columns
-    feat_df = pd.DataFrame({
-        'feature': feature_names,
-        'importance': importances
-    }).sort_values(by='importance', ascending=False)
+    feat_df = pd.DataFrame({'feature': feature_names, 'importance': importances}).sort_values(by='importance', ascending=False)
     print(feat_df)
+    
     return model
 
 def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:

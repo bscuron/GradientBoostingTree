@@ -38,14 +38,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private Dictionary<string, object> PAYLOAD_TYPE;
 		private int HISTORICAL_BARS_COUNT;
 		private TcpClient client;
+		private Indicators._The_Indicator_Store.TIS_PRC_v2c prc;
 		private WilliamsR williamsR;
-		private ROC roc;
-		private VROC vroc;
-		private RSI rsi;
-		private StochRSI stochRSI;
-		private Stochastics stoch;
-		private StochasticsFast stochFast;
-		private MACD macd;
+		private SMA sma10;
+		private SMA sma20;
+		private SMA sma50;
 
 		protected override void OnStateChange()
 		{
@@ -75,14 +72,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 					SaveModel = true;
 					break;
 				case State.Configure:
+					prc = TIS_PRC_v2c(3, 100, 1.62, 2);
 					williamsR = WilliamsR(14);
-					roc = ROC(14);
-					vroc = VROC(14, 3);
-					rsi = RSI(14, 3);
-					stochRSI = StochRSI(14);
-					stoch = Stochastics(7, 14, 3);
-					stochFast = StochasticsFast(3, 14);
-					macd = MACD(12, 26, 9);
+					sma10 = SMA(10);
+					sma20 = SMA(20);
+					sma50 = SMA(50);
 					break;
 				case State.Active: break;
 				case State.DataLoaded:
@@ -147,20 +141,18 @@ namespace NinjaTrader.NinjaScript.Strategies
 				candle_wick_to_volume_ratio = (candle_upperwick + candle_lowerwick) / Volume[0],
 				candle_upperwick_to_volume_ratio = candle_upperwick / Volume[0],
 				candle_lowerwick_to_volume_ratio = candle_lowerwick / Volume[0],
-				indicator_williamsR = williamsR[0]
 
-				// indicator_volume = Volume[0],
-				// indicator_volumedelta = Volume[0] - Volume[1],
-				// indicator_roc = roc[0],
-				// indicator_vroc = vroc[0],
-				// indicator_rsi = rsi[0],
-				// indicator_stochRSI = stochRSI[0],
-				// indicator_stochK = stoch.K[0],
-				// indicator_stochD = stoch.D[0],
-				// indicator_stochFastK = stochFast.K[0],
-				// indicator_stochFastD = stochFast.D[0],
-				// indicator_macdAvg = macd.Avg[0],
-				// indicator_macdDiff = macd.Diff[0]
+				indicator_prc_fx = Close[0] - prc.Fx[0],
+				indicator_prc_sqh = Close[0] - prc.Sqh[0],
+				indicator_prc_sqh2 = Close[0] - prc.Sqh2[0],
+				indicator_prc_sql = Close[0] - prc.Sql[0],
+				indicator_prc_sql2 = Close[0] - prc.Sql2[0],
+
+				indicator_williamsR = williamsR[0],
+
+				indicator_sma10 = Close[0] - sma10[0],
+				indicator_sma20 = Close[0] - sma20[0],
+				indicator_sma50 = Close[0] - sma50[0]
 			};
 			// Print($"[INFO] Sending message: {message}");
 			Send(client, message);
@@ -175,14 +167,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 					Print($"[INFO] Prediction: {pred}");
 					if (pred == 1)
 					{
-						ExitLong();
-						EnterShort();
 						Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.White);
 					}
 					else if (pred == 2)
 					{
-						ExitShort();
-						EnterLong();
 						Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.White);
 					}
 				}
