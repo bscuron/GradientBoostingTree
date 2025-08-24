@@ -40,9 +40,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private TcpClient client;
 		// private Indicators._The_Indicator_Store.TIS_PRC_v2c prc;
 		private WilliamsR williamsR;
-		private SMA sma10;
-		private SMA sma20;
-		private SMA sma50;
 
 		protected override void OnStateChange()
 		{
@@ -74,9 +71,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 				case State.Configure:
 					// prc = TIS_PRC_v2c(3, 100, 1.62, 2);
 					williamsR = WilliamsR(14);
-					sma10 = SMA(10);
-					sma20 = SMA(20);
-					sma50 = SMA(50);
 					break;
 				case State.Active: break;
 				case State.DataLoaded:
@@ -148,11 +142,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 				// indicator_prc_sql = Close[0] - prc.Sql[0],
 				// indicator_prc_sql2 = Close[0] - prc.Sql2[0],
 
-				indicator_williamsR = williamsR[0],
-
-				indicator_sma10 = Close[0] - sma10[0],
-				indicator_sma20 = Close[0] - sma20[0],
-				indicator_sma50 = Close[0] - sma50[0]
+				indicator_williamsR = williamsR[0]
 			};
 			// Print($"[INFO] Sending message: {message}");
 			Send(client, message);
