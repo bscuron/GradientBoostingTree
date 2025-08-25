@@ -130,7 +130,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 		{
 			while (!TrainingFinished || client == null)
 			{
-				Print("SLEEPING");
 				Thread.Sleep(1000);
 			}
 			var row = new {
@@ -142,7 +141,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 				Low = Low[0],
 				Close = Close[0]
 			};
-			Print("SEND");
 			Send(client, row);
 			Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
 			if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["CLASS"]))
@@ -151,11 +149,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 				Print($"[INFO] {Thread.CurrentThread.ManagedThreadId} Prediction: {predictionClass}");
 				if (predictionClass == 1)
 				{
-					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.White);
+					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.Cyan);
 				}
 				else if (predictionClass == 2)
 				{
-					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.White);
+					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.Cyan);
 				}
 			}
 		}
