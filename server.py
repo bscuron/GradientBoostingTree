@@ -71,25 +71,9 @@ def handle(conn: socket.socket, payload: dict):
 
     match payload.get('Type'):
         case PAYLOAD_TYPE.TRAIN_ROW:
+            if len(data) % 1000 == 0:
+                print(f'[INFO] Training payload received')
             data.append(payload)
-        case PAYLOAD_TYPE.ROW:
-            data.append(payload)
-            if not model:
-                print('[INFO] Loading model...')
-                model = joblib.load('./model.pkl')
-                print('[INFO] Model loaded')
-            if len(data) > lookback_period:
-                data = data[-(lookback_period+1):]
-                # TODO: bad, dont reconstruct dataframe for each prediction
-                df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
-                if not df.empty:
-                    pred_class = int(model.predict(df.iloc[[-1]])[0])
-                    print(f'[INFO] Prediction: {pred_class}')
-                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': pred_class}))
-                else:
-                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': 0 }))
-            else:
-                send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': 0 }))
         case PAYLOAD_TYPE.TRAIN_START:
             print(f'[INFO] Starting training...')
             model = ml.train(data, lookback_period=lookback_period)
@@ -99,3 +83,23 @@ def handle(conn: socket.socket, payload: dict):
                 joblib.dump(model, 'model.pkl')
                 print(f'[INFO] Model saved')
             send(conn, json.dumps({ 'Type': PAYLOAD_TYPE.TRAIN_FINISH }))
+        case PAYLOAD_TYPE.ROW:
+            print(f'PRED ROW: {payload}')
+            if not model:
+                data = []
+                print('[INFO] Loading model...')
+                model = joblib.load('./model.pkl')
+                print('[INFO] Model loaded')
+            data.append(payload)
+            if len(data) > lookback_period:
+                data = data[-(lookback_period+1):]
+                # TODO: bad, dont reconstruct dataframe for each prediction
+                df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
+                if not df.empty:
+                    pred_class = int(model.predict(df.iloc[[-1]])[0])
+                    print(f'[INFO] Prediction: {pred_class}')
+                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': pred_class}))
+                else:
+                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': 0 }))
+            else:
+                send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': 0 }))

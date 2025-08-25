@@ -36,6 +36,7 @@ def train(rows=None, lookback_period=5, undersample_ratio=3):
     class_counts = y_train.value_counts().to_dict()
     max_count = max(class_counts.values())
     
+    # TODO: Research Bayesian Optimization or Gradient-free search
     model = LGBMClassifier(
         objective='multiclass',
         num_class=3,

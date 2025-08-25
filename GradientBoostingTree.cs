@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
 using System.Text;
 using System.Linq;
 using System.Net.Sockets;
@@ -35,7 +36,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private Dictionary<string, object> CONFIG;
 		private Dictionary<string, object> TCP;
 		private Dictionary<string, object> PAYLOAD_TYPE;
+		private volatile bool TrainingFinished = false;
 		private TcpClient client;
+		private Thread trainingThread;
 
 		protected override void OnStateChange()
 		{
@@ -63,6 +66,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					IsInstantiatedOnEachOptimizationIteration	= true;
 					TrainModel = true;
 					TrainingSamples = 250_000;
+					TrainingSamplesOffset = 0;
 					SaveModel = true;
 					break;
 				case State.Configure:
@@ -76,31 +80,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 					PAYLOAD_TYPE = CONFIG["PAYLOAD_TYPE"] as Dictionary<string, object>;
 					client = Connect(Convert.ToString(TCP["HOST"]), Convert.ToInt32(TCP["PORT"]));
 
-					BarsRequest request = new BarsRequest(BarsArray[1].Instrument, TrainingSamples);
-					request.BarsPeriod = new BarsPeriod {BarsPeriodType = BarsPeriod.BarsPeriodType, Value = BarsPeriod.Value};
-					request.TradingHours = Bars.Instrument.MasterInstrument.TradingHours;
-					request.Request(new Action<BarsRequest, ErrorCode, string>((bars, errorCode, errorMessage) => {
-						for (int i = 0; i < bars.Bars.Count; i++)
-						{
-							var row = new {
-								Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_ROW"]),
-								Time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
-								Volume = bars.Bars.GetVolume(i),
-								Open = bars.Bars.GetOpen(i),
-								High = bars.Bars.GetHigh(i),
-								Low = bars.Bars.GetLow(i),
-								Close = bars.Bars.GetClose(i)
-							};
-							Send(client, row);
-						}
-						Send(client, new { Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
-
-						Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-						if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["TRAIN_FINISH"]))
-						{
-							Print("[INFO] Model trained");
-						}
-					}));
+					trainingThread = new Thread(Train);
+					trainingThread.IsBackground = true;
+					trainingThread.Start();
 					break;
 				case State.Historical:
 					break;
@@ -112,8 +94,70 @@ namespace NinjaTrader.NinjaScript.Strategies
 			}
 		}
 
+		private void Train()
+		{
+			BarsRequest request = new BarsRequest(BarsArray[1].Instrument, TrainingSamples + TrainingSamplesOffset);
+			request.BarsPeriod = new BarsPeriod {BarsPeriodType = BarsPeriod.BarsPeriodType, Value = BarsPeriod.Value};
+			request.TradingHours = Bars.Instrument.MasterInstrument.TradingHours;
+			request.Request(new Action<BarsRequest, ErrorCode, string>((bars, errorCode, errorMessage) => {
+				int n = bars.Bars.Count - TrainingSamplesOffset;
+				for (int i = 0; i < n; i++)
+				{
+					var row = new {
+						Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_ROW"]),
+						Time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
+						Volume = bars.Bars.GetVolume(i),
+						Open = bars.Bars.GetOpen(i),
+						High = bars.Bars.GetHigh(i),
+						Low = bars.Bars.GetLow(i),
+						Close = bars.Bars.GetClose(i),
+					};
+					Send(client, row);
+				}
+				Send(client, new { Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
+
+				Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
+				if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["TRAIN_FINISH"]))
+				{
+					TrainingFinished = true;
+					Print("[INFO] Model trained");
+				}
+			}));
+
+		}
+
 		protected override void OnBarUpdate()
 		{
+			while (!TrainingFinished || client == null)
+			{
+				Print("SLEEPING");
+				Thread.Sleep(1000);
+			}
+			var row = new {
+				Type = Convert.ToInt32(PAYLOAD_TYPE["ROW"]),
+				Time =  ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
+				Volume = Volume[0],
+				Open = Open[0],
+				High = High[0],
+				Low = Low[0],
+				Close = Close[0]
+			};
+			Print("SEND");
+			Send(client, row);
+			Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
+			if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["CLASS"]))
+			{
+				int predictionClass = Convert.ToInt32(response["Class"]);
+				Print($"[INFO] {Thread.CurrentThread.ManagedThreadId} Prediction: {predictionClass}");
+				if (predictionClass == 1)
+				{
+					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.White);
+				}
+				else if (predictionClass == 2)
+				{
+					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.White);
+				}
+			}
 		}
 
 		private TcpClient Connect(string host, int port)
@@ -212,6 +256,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 		[Range(1, int.MaxValue)]
 		[Display(Name="TrainingSamples", Order=2, GroupName="Parameters")]
 		public int TrainingSamples { get; set; }
+
+		[NinjaScriptProperty]
+		[Range(0, int.MaxValue)]
+		[Display(Name="TrainingSamplesOffset", Order=2, GroupName="Parameters")]
+		public int TrainingSamplesOffset { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="Save Model", Order=3, GroupName="Parameters")]
