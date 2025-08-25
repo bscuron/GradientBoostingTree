@@ -5,8 +5,8 @@ using System.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using System.Text;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Windows;
@@ -32,13 +32,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 	{
 
 		private string CONFIG_PATH = System.Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\projects\GradientBoostingTree\config.json");
-		private bool TrainingStarted = false;
 		private Dictionary<string, object> CONFIG;
 		private Dictionary<string, object> TCP;
 		private Dictionary<string, object> PAYLOAD_TYPE;
-		private int HISTORICAL_BARS_COUNT;
 		private TcpClient client;
-		private WilliamsR williamsR;
 
 		protected override void OnStateChange()
 		{
@@ -54,7 +51,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					IsExitOnSessionCloseStrategy				= true;
 					ExitOnSessionCloseSeconds					= 30;
 					IsFillLimitOnTouch							= false;
-					MaximumBarsLookBack							= MaximumBarsLookBack.TwoHundredFiftySix;
+					MaximumBarsLookBack							= MaximumBarsLookBack.Infinite;
 					OrderFillResolution							= OrderFillResolution.Standard;
 					Slippage									= 0;
 					StartBehavior								= StartBehavior.WaitUntilFlat;
@@ -65,10 +62,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 					BarsRequiredToTrade							= 26;
 					IsInstantiatedOnEachOptimizationIteration	= true;
 					TrainModel = true;
+					TrainingSamples = 250_000;
 					SaveModel = true;
 					break;
 				case State.Configure:
-					williamsR = WilliamsR(14);
+					BarsPeriod primaryBarsPeriod = new BarsPeriod {BarsPeriodType = BarsPeriod.BarsPeriodType, Value = BarsPeriod.Value};
+					AddDataSeries(BarsPeriod.BarsPeriodType, BarsPeriod.Value);
 					break;
 				case State.Active: break;
 				case State.DataLoaded:
@@ -76,9 +75,34 @@ namespace NinjaTrader.NinjaScript.Strategies
 					TCP = CONFIG["TCP"] as Dictionary<string, object>;
 					PAYLOAD_TYPE = CONFIG["PAYLOAD_TYPE"] as Dictionary<string, object>;
 					client = Connect(Convert.ToString(TCP["HOST"]), Convert.ToInt32(TCP["PORT"]));
+
+					BarsRequest request = new BarsRequest(BarsArray[1].Instrument, TrainingSamples);
+					request.BarsPeriod = new BarsPeriod {BarsPeriodType = BarsPeriod.BarsPeriodType, Value = BarsPeriod.Value};
+					request.TradingHours = Bars.Instrument.MasterInstrument.TradingHours;
+					request.Request(new Action<BarsRequest, ErrorCode, string>((bars, errorCode, errorMessage) => {
+						for (int i = 0; i < bars.Bars.Count; i++)
+						{
+							var row = new {
+								Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_ROW"]),
+								Time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
+								Volume = bars.Bars.GetVolume(i),
+								Open = bars.Bars.GetOpen(i),
+								High = bars.Bars.GetHigh(i),
+								Low = bars.Bars.GetLow(i),
+								Close = bars.Bars.GetClose(i)
+							};
+							Send(client, row);
+						}
+						Send(client, new { Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
+
+						Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
+						if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["TRAIN_FINISH"]))
+						{
+							Print("[INFO] Model trained");
+						}
+					}));
 					break;
 				case State.Historical:
-					HISTORICAL_BARS_COUNT = Bars.Count;
 					break;
 				case State.Transition: break;
 				case State.Realtime: break;
@@ -90,73 +114,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		protected override void OnBarUpdate()
 		{
-			if (client == null) return;
-			if (CurrentBar < BarsRequiredToTrade) return;
-			if (TrainModel && CurrentBar == (int)(TrainingPercentage * HISTORICAL_BARS_COUNT))
-			{
-				TrainingStarted = true;
-				Print("[INFO] Message sent to server to begin training");
-				Send(client, new { type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_START"]), save = SaveModel });
-				Draw.VerticalLine(this, CurrentBar.ToString(), 0, Brushes.Cyan);
-				Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-				int type = Convert.ToInt32(response["type"]);
-				if (type == Convert.ToInt32(PAYLOAD_TYPE["TRAIN_END"]))
-				Print("[INFO] Model trained");
-			}
-			if (TrainingStarted) return;
-
-			double eps = 1e-6;
-			double candle_body = Close[0] - Open[0] + eps;
-			double candle_body_size = Math.Abs(candle_body);
-			double candle_upperwick = High[0] - Math.Max(Open[0], Close[0]);
-			double candle_lowerwick = Math.Min(Open[0], Close[0]) - Low[0] + eps;
-			double candle_range = High[0] - Low[0] + eps;
-			double candle_direction = Math.Sign(candle_body);
-			var message = new {
-				type = Convert.ToInt32(PAYLOAD_TYPE[TrainModel ? "TRAIN_DATA" : "DATA"]),
-				time = ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
-				high = High[0],
-				low = Low[0],
-				close = Close[0],
-
-				candle_body_size = candle_body_size,
-				candle_range = candle_range,
-				candle_body_to_range_ratio = candle_body_size / candle_range,
-				candle_upperwick = candle_upperwick,
-				candle_lowerwick = candle_lowerwick,
-				candle_body_to_wick_ratio = candle_body_size / (candle_upperwick + candle_lowerwick),
-				candle_body_to_volume_ratio = candle_body_size / Volume[0],
-				candle_wick_ratio = candle_upperwick / candle_lowerwick,
-				candle_wick_to_range_ratio = (candle_upperwick + candle_lowerwick) / candle_range,
-				candle_upperwick_to_range_ratio = candle_upperwick / candle_range,
-				candle_lowerwick_to_range_ratio = candle_lowerwick / candle_range,
-				candle_wick_to_volume_ratio = (candle_upperwick + candle_lowerwick) / Volume[0],
-				candle_upperwick_to_volume_ratio = candle_upperwick / Volume[0],
-				candle_lowerwick_to_volume_ratio = candle_lowerwick / Volume[0],
-
-				indicator_williamsR = williamsR[0]
-			};
-			// Print($"[INFO] Sending message: {message}");
-			Send(client, message);
-
-			if (!TrainModel)
-			{
-				Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-				int type = Convert.ToInt32(response["type"]);
-				if (type == Convert.ToInt32(PAYLOAD_TYPE["PRED"]))
-				{
-					int pred = Convert.ToInt32(response["class"]);
-					Print($"[INFO] Prediction: {pred}");
-					if (pred == 1)
-					{
-						Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.White);
-					}
-					else if (pred == 2)
-					{
-						Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 2, Brushes.White);
-					}
-				}
-			}
 		}
 
 		private TcpClient Connect(string host, int port)
@@ -244,6 +201,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 			Dictionary<string, object> config = serializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
 			return config;
 		}
+
 		#region Properties
 		[NinjaScriptProperty]
 		[Display(Name="TrainModel", Order=1, GroupName="Parameters")]
@@ -251,9 +209,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 		{ get; set; }
 
 		[NinjaScriptProperty]
-		[Range(0.0, 0.95)]
-		[Display(Name="TrainingPercentage", Order=2, GroupName="Parameters")]
-		public double TrainingPercentage { get; set; }
+		[Range(1, int.MaxValue)]
+		[Display(Name="TrainingSamples", Order=2, GroupName="Parameters")]
+		public int TrainingSamples { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="Save Model", Order=3, GroupName="Parameters")]

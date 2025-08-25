@@ -69,10 +69,10 @@ def receive(conn: socket.socket) -> dict:
 def handle(conn: socket.socket, payload: dict):
     global data, model
 
-    match payload.get('type'):
-        case PAYLOAD_TYPE.TRAIN_DATA:
+    match payload.get('Type'):
+        case PAYLOAD_TYPE.TRAIN_ROW:
             data.append(payload)
-        case PAYLOAD_TYPE.DATA:
+        case PAYLOAD_TYPE.ROW:
             data.append(payload)
             if not model:
                 print('[INFO] Loading model...')
@@ -85,11 +85,11 @@ def handle(conn: socket.socket, payload: dict):
                 if not df.empty:
                     pred_class = int(model.predict(df.iloc[[-1]])[0])
                     print(f'[INFO] Prediction: {pred_class}')
-                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': pred_class}))
+                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': pred_class}))
                 else:
-                    send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': 0 }))
+                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': 0 }))
             else:
-                send(conn, json.dumps({'type': PAYLOAD_TYPE.PRED, 'class': 0 }))
+                send(conn, json.dumps({'Type': PAYLOAD_TYPE.PRED, 'Class': 0 }))
         case PAYLOAD_TYPE.TRAIN_START:
             print(f'[INFO] Starting training...')
             model = ml.train(data, lookback_period=lookback_period)
@@ -98,4 +98,4 @@ def handle(conn: socket.socket, payload: dict):
                 print(f'[INFO] Saving model...')
                 joblib.dump(model, 'model.pkl')
                 print(f'[INFO] Model saved')
-            send(conn, json.dumps({ 'type': PAYLOAD_TYPE.TRAIN_END }))
+            send(conn, json.dumps({ 'Type': PAYLOAD_TYPE.TRAIN_FINISH }))

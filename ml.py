@@ -3,13 +3,12 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
+from ta import add_all_ta_features
+from ta.momentum import williams_r
 
-from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-
-def train(data=None, lookback_period=5, undersample_ratio=3):
-    df_unprocessed = pd.DataFrame(data)
-    print(f'[INFO] Training Data: {df_unprocessed}')
+def train(rows=None, lookback_period=5, undersample_ratio=3):
+    df_unprocessed = pd.DataFrame(rows)
+    print(f'[INFO] Training Data (Unprocessed): {df_unprocessed}')
     
     df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
     print(f'[INFO] Features: {df_processed.columns}')
@@ -86,8 +85,8 @@ def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:
     return dfc
 
 def find_swings(data, strength=5):
-    highs = data['high'].values
-    lows = data['low'].values
+    highs = data['High'].values
+    lows = data['Low'].values
 
     labels = [0] * len(data)
     for i in range(strength, len(data) - strength):
@@ -98,6 +97,30 @@ def find_swings(data, strength=5):
 
     return pd.Series(labels, name='label')
 
-def preprocess(data: pd.DataFrame) -> pd.DataFrame:
-    data_numeric = data.drop(['type', 'time', 'high', 'low', 'close'], axis=1)
-    return pd.concat([data_numeric], axis=1)
+def preprocess(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    eps = 1e-6
+
+    df['candle_body'] = df['Close'] - df['Open']
+    df['candle_body_size'] = df['candle_body'].abs()
+    df['candle_range'] = df['High'] - df['Low']
+
+    df['candle_body_to_range_ratio'] = df['candle_body_size'] / (df['candle_range'] + eps)
+    df['candle_upperwick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
+    df['candle_lowerwick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
+
+    total_wick = df['candle_upperwick'] + df['candle_lowerwick']
+    df['candle_body_to_wick_ratio'] = df['candle_body_size'] / (total_wick + eps)
+    df['candle_body_to_volume_ratio'] = df['candle_body_size'] / (df['Volume'] + eps)
+    df['candle_wick_ratio'] = df['candle_upperwick'] / (df['candle_lowerwick'] + eps)
+    df['candle_wick_to_range_ratio'] = total_wick / (df['candle_range'] + eps)
+    df['candle_upperwick_to_range_ratio'] = df['candle_upperwick'] / (df['candle_range'] + eps)
+    df['candle_lowerwick_to_range_ratio'] = df['candle_lowerwick'] / (df['candle_range'] + eps)
+    df['candle_wick_to_volume_ratio'] = total_wick / (df['Volume'] + eps)
+    df['candle_upperwick_to_volume_ratio'] = df['candle_upperwick'] / (df['Volume'] + eps)
+    df['candle_lowerwick_to_volume_ratio'] = df['candle_lowerwick'] / (df['Volume'] + eps)
+
+    df['williams_r'] = williams_r(df['High'], df['Low'], df['Close'], 14, True)
+
+    return df.drop(['Type', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume'], axis=1)

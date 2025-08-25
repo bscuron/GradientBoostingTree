@@ -1,11 +1,10 @@
 {
 	"PAYLOAD_TYPE": {
-		"ACK": 0,
-		"TRAIN_START": 1,
-		"TRAIN_END": 2,
-		"TRAIN_DATA": 3,
-		"DATA": 4,
-		"PRED": 5
+		"TRAIN_START": 0,
+		"TRAIN_ROW": 1,
+		"TRAIN_FINISH": 2,
+		"ROW": 3,
+		"CLASS": 4
 	},
 	"TCP": {
 		"HOST": "127.0.0.1",
