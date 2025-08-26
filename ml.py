@@ -10,7 +10,7 @@ def train(rows=None, lookback_period=5, undersample_ratio=3):
     df_unprocessed = pd.DataFrame(rows)
     print(f'[INFO] Training Data (Unprocessed): {df_unprocessed}')
     
-    df_processed = lookback(preprocess(df_unprocessed), period=lookback_period)
+    df_processed = lookback(preprocess(df_unprocessed.copy()), period=lookback_period)
     print(f'[INFO] Features: {df_processed.columns}')
     print(f'[INFO] Training Data (Processed): {df_processed}')
     
@@ -71,7 +71,6 @@ def train(rows=None, lookback_period=5, undersample_ratio=3):
     return model
 
 def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:
-    dfc = df.copy()
     lagged_cols = []
 
     for col in df.columns:
@@ -80,10 +79,10 @@ def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:
 
     if lagged_cols:
         df_lags = pd.concat(lagged_cols, axis=1)
-        dfc = pd.concat([dfc, df_lags], axis=1)
+        df = pd.concat([df, df_lags], axis=1)
 
-    dfc = dfc.dropna().reset_index(drop=True)
-    return dfc
+    df = df.dropna().reset_index(drop=True)
+    return df
 
 def find_swings(data, strength=5):
     highs = data['High'].values
@@ -99,8 +98,6 @@ def find_swings(data, strength=5):
     return pd.Series(labels, name='label')
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
     eps = 1e-6
 
     df['candle_body'] = df['Close'] - df['Open']

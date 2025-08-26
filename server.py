@@ -5,10 +5,12 @@ import struct
 import joblib
 import pandas as pd
 from types import SimpleNamespace
+from collections import deque
 
 TCP, PAYLOAD_TYPE = None, None
 sock, conn = None, None
-model, data, lookback_period = None, [], 50
+model, lookback_period = None, 50
+train_rows, pred_rows = [], []
 
 def main(CONFIG: SimpleNamespace):
     global TCP, PAYLOAD_TYPE
@@ -67,16 +69,14 @@ def receive(conn: socket.socket) -> dict:
     return json.loads(payload.decode('utf-8'))
 
 def handle(conn: socket.socket, payload: dict):
-    global data, model
+    global train_rows, pred_rows, model
 
     match payload.get('Type'):
         case PAYLOAD_TYPE.TRAIN_ROW:
-            if len(data) % 1000 == 0:
-                print(f'[INFO] Training payload received')
-            data.append(payload)
+            train_rows.append(payload)
         case PAYLOAD_TYPE.TRAIN_START:
             print(f'[INFO] Starting training...')
-            model = ml.train(data, lookback_period=lookback_period)
+            model = ml.train(train_rows, lookback_period=lookback_period)
             print(f'[INFO] Training finished')
             if payload.get('Save'):
                 print(f'[INFO] Saving model...')
@@ -85,20 +85,15 @@ def handle(conn: socket.socket, payload: dict):
             send(conn, json.dumps({ 'Type': PAYLOAD_TYPE.TRAIN_FINISH }))
         case PAYLOAD_TYPE.ROW:
             if not model:
-                data = []
                 print('[INFO] Loading model...')
                 model = joblib.load('./model.pkl')
                 print('[INFO] Model loaded')
-            data.append(payload)
-            if len(data) > lookback_period:
-                data = data[-(lookback_period+1):]
-                # TODO: bad, dont reconstruct dataframe for each prediction
-                df = ml.lookback(ml.preprocess(pd.DataFrame(data)), period=lookback_period)
-                if not df.empty:
-                    pred_class = int(model.predict(df.iloc[[-1]])[0])
-                    print(f'[INFO] Prediction: {pred_class}')
-                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': pred_class}))
-                else:
-                    send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': 0 }))
+            pred_rows.append(payload)
+            if len(pred_rows) > lookback_period:
+                pred_rows = pred_rows[-(lookback_period+1):]
+                df = ml.lookback(ml.preprocess(pd.DataFrame(pred_rows)), period=lookback_period)
+                pred_class = int(model.predict(df.iloc[[-1]])[0])
+                print(f'[INFO] Prediction: {pred_class}')
+                send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': pred_class}))
             else:
                 send(conn, json.dumps({'Type': PAYLOAD_TYPE.CLASS, 'Class': 0 }))
