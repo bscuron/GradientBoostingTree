@@ -78,15 +78,14 @@ def handle(conn: socket.socket, payload: dict):
             print(f'[INFO] Starting training...')
             model = ml.train(data, lookback_period=lookback_period)
             print(f'[INFO] Training finished')
-            if payload.get('save'):
+            if payload.get('Save'):
                 print(f'[INFO] Saving model...')
                 joblib.dump(model, 'model.pkl')
                 print(f'[INFO] Model saved')
             send(conn, json.dumps({ 'Type': PAYLOAD_TYPE.TRAIN_FINISH }))
         case PAYLOAD_TYPE.ROW:
-            print(f'PRED ROW: {payload}')
             if not model:
-                data = deque(maxlen=lookback_period + 1)
+                data = []
                 print('[INFO] Loading model...')
                 model = joblib.load('./model.pkl')
                 print('[INFO] Model loaded')

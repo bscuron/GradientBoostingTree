@@ -32,13 +32,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 	public class GradientBoostingTree : Strategy
 	{
 
-		private string CONFIG_PATH = System.Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\projects\GradientBoostingTree\config.json");
-		private Dictionary<string, object> CONFIG;
-		private Dictionary<string, object> TCP;
-		private Dictionary<string, object> PAYLOAD_TYPE;
+		private string CONFIGURATION_PATH = System.Environment.ExpandEnvironmentVariables(@"%USERPROFILE%\Documents\projects\GradientBoostingTree\config.json");
+		private Dictionary<string, object> CONFIGURATION;
+		private Dictionary<string, object> CONFIGURATION_TCP;
+		private Dictionary<string, object> CONFIGURATION_PAYLOAD_TYPE;
 		private volatile bool TrainingFinished = false;
 		private TcpClient client;
-		private Thread trainingThread;
+		private Thread requestThread;
 
 		protected override void OnStateChange()
 		{
@@ -75,14 +75,17 @@ namespace NinjaTrader.NinjaScript.Strategies
 					break;
 				case State.Active: break;
 				case State.DataLoaded:
-					CONFIG = LoadConfiguration(CONFIG_PATH);
-					TCP = CONFIG["TCP"] as Dictionary<string, object>;
-					PAYLOAD_TYPE = CONFIG["PAYLOAD_TYPE"] as Dictionary<string, object>;
-					client = Connect(Convert.ToString(TCP["HOST"]), Convert.ToInt32(TCP["PORT"]));
+					CONFIGURATION = LoadConfiguration(CONFIGURATION_PATH);
+					CONFIGURATION_TCP = CONFIGURATION["TCP"] as Dictionary<string, object>;
+					CONFIGURATION_PAYLOAD_TYPE = CONFIGURATION["PAYLOAD_TYPE"] as Dictionary<string, object>;
+					client = Connect(Convert.ToString(CONFIGURATION_TCP["HOST"]), Convert.ToInt32(CONFIGURATION_TCP["PORT"]));
 
-					trainingThread = new Thread(Train);
-					trainingThread.IsBackground = true;
-					trainingThread.Start();
+					if (TrainModel)
+					{
+						requestThread = new Thread(RequestData);
+						requestThread.IsBackground = true;
+						requestThread.Start();
+					}
 					break;
 				case State.Historical:
 					break;
@@ -94,7 +97,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 			}
 		}
 
-		private void Train()
+		private void RequestData()
 		{
 			BarsRequest request = new BarsRequest(BarsArray[1].Instrument, TrainingSamples + TrainingSamplesOffset);
 			request.BarsPeriod = new BarsPeriod {BarsPeriodType = BarsPeriod.BarsPeriodType, Value = BarsPeriod.Value};
@@ -104,7 +107,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 				for (int i = 0; i < n; i++)
 				{
 					var row = new {
-						Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_ROW"]),
+						Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_ROW"]),
 						Time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
 						Volume = bars.Bars.GetVolume(i),
 						Open = bars.Bars.GetOpen(i),
@@ -114,10 +117,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 					};
 					Send(client, row);
 				}
-				Send(client, new { Type = Convert.ToInt32(PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
+				Send(client, new { Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
 
 				Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-				if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["TRAIN_FINISH"]))
+				if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_FINISH"]))
 				{
 					TrainingFinished = true;
 					Print("[INFO] Model trained");
@@ -128,12 +131,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		protected override void OnBarUpdate()
 		{
-			while (!TrainingFinished || client == null)
+			while ((TrainModel && !TrainingFinished) || client == null)
 			{
 				Thread.Sleep(1000);
 			}
 			var row = new {
-				Type = Convert.ToInt32(PAYLOAD_TYPE["ROW"]),
+				Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["ROW"]),
 				Time =  ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
 				Volume = Volume[0],
 				Open = Open[0],
@@ -143,10 +146,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 			};
 			Send(client, row);
 			Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-			if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(PAYLOAD_TYPE["CLASS"]))
+			if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["CLASS"]))
 			{
 				int predictionClass = Convert.ToInt32(response["Class"]);
-				Print($"[INFO] {Thread.CurrentThread.ManagedThreadId} Prediction: {predictionClass}");
 				if (predictionClass == 1)
 				{
 					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 2, Brushes.Cyan);
@@ -240,8 +242,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private Dictionary<string, object> LoadConfiguration(String path)
 		{
 			JavaScriptSerializer serializer = new JavaScriptSerializer();
-			Dictionary<string, object> config = serializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
-			return config;
+			Dictionary<string, object> configuration = serializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
+			return configuration;
 		}
 
 		#region Properties
