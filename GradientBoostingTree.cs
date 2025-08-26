@@ -151,11 +151,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 				int predictionClass = Convert.ToInt32(response["Class"]);
 				if (predictionClass == 1)
 				{
-					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 4, Brushes.White);
+					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 4, Brushes.Violet);
 				}
 				else if (predictionClass == 2)
 				{
-					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 4, Brushes.White);
+					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 4, Brushes.Violet);
 				}
 			}
 		}
