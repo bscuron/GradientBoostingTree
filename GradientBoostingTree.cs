@@ -62,7 +62,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					TraceOrders									= false;
 					RealtimeErrorHandling						= RealtimeErrorHandling.StopCancelClose;
 					StopTargetHandling							= StopTargetHandling.PerEntryExecution;
-					BarsRequiredToTrade							= 26;
+					BarsRequiredToTrade							= 0;
 					IsInstantiatedOnEachOptimizationIteration	= true;
 					TrainModel = true;
 					TrainingSamples = 250_000;
@@ -151,11 +151,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 				int predictionClass = Convert.ToInt32(response["Class"]);
 				if (predictionClass == 1)
 				{
-					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 4, Brushes.Violet);
+					PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Alert1.wav");
+					Draw.ArrowDown(this, CurrentBar.ToString(), true, 0, High[0] + TickSize * 4, Brushes.White);
 				}
 				else if (predictionClass == 2)
 				{
-					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 4, Brushes.Violet);
+					PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Alert1.wav");
+					Draw.ArrowUp(this, CurrentBar.ToString(), true, 0, Low[0] - TickSize * 4, Brushes.White);
 				}
 			}
 		}
@@ -248,18 +250,18 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		#region Properties
 		[NinjaScriptProperty]
-		[Display(Name="TrainModel", Order=1, GroupName="Parameters")]
+		[Display(Name="Train Model", Order=1, GroupName="Parameters")]
 		public bool TrainModel
 		{ get; set; }
 
 		[NinjaScriptProperty]
 		[Range(1, int.MaxValue)]
-		[Display(Name="TrainingSamples", Order=2, GroupName="Parameters")]
+		[Display(Name="Training Samples", Order=2, GroupName="Parameters")]
 		public int TrainingSamples { get; set; }
 
 		[NinjaScriptProperty]
 		[Range(0, int.MaxValue)]
-		[Display(Name="TrainingSamplesOffset", Order=2, GroupName="Parameters")]
+		[Display(Name="Training Samples Offset", Order=2, GroupName="Parameters")]
 		public int TrainingSamplesOffset { get; set; }
 
 		[NinjaScriptProperty]

@@ -3,8 +3,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from ta import add_all_ta_features
 from ta.momentum import williams_r
+from ta.trend import trix
 
 def train(rows=None, lookback_period=5, undersample_ratio=3):
     df_unprocessed = pd.DataFrame(rows)
@@ -120,5 +120,6 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df['candle_lowerwick_to_volume_ratio'] = df['candle_lowerwick'] / (df['Volume'] + eps)
 
     df['williams_r'] = williams_r(df['High'], df['Low'], df['Close'], 14, True)
+    df['trix'] = trix(df['Close'], 14, True)
 
-    return df.drop(['Type', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume'], axis=1)
+    return df.dropna().drop(['Type', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume'], axis=1)
