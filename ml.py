@@ -3,8 +3,6 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-from ta.momentum import williams_r
-from ta.trend import trix
 
 def train(rows=None, lookback_period=5, undersample_ratio=3):
     df_unprocessed = pd.DataFrame(rows)
@@ -85,8 +83,8 @@ def lookback(df: pd.DataFrame, period: int = 5) -> pd.DataFrame:
     return df
 
 def find_swings(data, strength=5):
-    highs = data['High'].values
-    lows = data['Low'].values
+    highs = data['high'].values
+    lows = data['low'].values
 
     labels = [0] * len(data)
     for i in range(strength, len(data) - strength):
@@ -100,26 +98,23 @@ def find_swings(data, strength=5):
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     eps = 1e-6
 
-    df['candle_body'] = df['Close'] - df['Open']
+    df['candle_body'] = df['close'] - df['open']
     df['candle_body_size'] = df['candle_body'].abs()
-    df['candle_range'] = df['High'] - df['Low']
+    df['candle_range'] = df['high'] - df['low']
 
     df['candle_body_to_range_ratio'] = df['candle_body_size'] / (df['candle_range'] + eps)
-    df['candle_upperwick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
-    df['candle_lowerwick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
+    df['candle_upperwick'] = df['high'] - df[['open', 'close']].max(axis=1)
+    df['candle_lowerwick'] = df[['open', 'close']].min(axis=1) - df['low']
 
     total_wick = df['candle_upperwick'] + df['candle_lowerwick']
     df['candle_body_to_wick_ratio'] = df['candle_body_size'] / (total_wick + eps)
-    df['candle_body_to_volume_ratio'] = df['candle_body_size'] / (df['Volume'] + eps)
+    df['candle_body_to_volume_ratio'] = df['candle_body_size'] / (df['volume'] + eps)
     df['candle_wick_ratio'] = df['candle_upperwick'] / (df['candle_lowerwick'] + eps)
     df['candle_wick_to_range_ratio'] = total_wick / (df['candle_range'] + eps)
     df['candle_upperwick_to_range_ratio'] = df['candle_upperwick'] / (df['candle_range'] + eps)
     df['candle_lowerwick_to_range_ratio'] = df['candle_lowerwick'] / (df['candle_range'] + eps)
-    df['candle_wick_to_volume_ratio'] = total_wick / (df['Volume'] + eps)
-    df['candle_upperwick_to_volume_ratio'] = df['candle_upperwick'] / (df['Volume'] + eps)
-    df['candle_lowerwick_to_volume_ratio'] = df['candle_lowerwick'] / (df['Volume'] + eps)
+    df['candle_wick_to_volume_ratio'] = total_wick / (df['volume'] + eps)
+    df['candle_upperwick_to_volume_ratio'] = df['candle_upperwick'] / (df['volume'] + eps)
+    df['candle_lowerwick_to_volume_ratio'] = df['candle_lowerwick'] / (df['volume'] + eps)
 
-    df['williams_r'] = williams_r(df['High'], df['Low'], df['Close'], 14, True)
-    df['trix'] = trix(df['Close'], 14, True)
-
-    return df.dropna().drop(['Type', 'Time', 'Open', 'High', 'Low', 'Close', 'Volume'], axis=1)
+    return df.dropna().drop(['type', 'time', 'open', 'high', 'low', 'close', 'volume'], axis=1)

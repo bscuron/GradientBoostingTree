@@ -60,7 +60,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					StartBehavior								= StartBehavior.WaitUntilFlat;
 					TimeInForce									= TimeInForce.Gtc;
 					TraceOrders									= false;
-					RealtimeErrorHandling						= RealtimeErrorHandling.StopCancelClose;
+					RealtimeErrorHandling						= RealtimeErrorHandling.IgnoreAllErrorsNoAlert;
 					StopTargetHandling							= StopTargetHandling.PerEntryExecution;
 					BarsRequiredToTrade							= 0;
 					IsInstantiatedOnEachOptimizationIteration	= true;
@@ -76,9 +76,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 				case State.Active: break;
 				case State.DataLoaded:
 					CONFIGURATION = LoadConfiguration(CONFIGURATION_PATH);
-					CONFIGURATION_TCP = CONFIGURATION["TCP"] as Dictionary<string, object>;
-					CONFIGURATION_PAYLOAD_TYPE = CONFIGURATION["PAYLOAD_TYPE"] as Dictionary<string, object>;
-					client = Connect(Convert.ToString(CONFIGURATION_TCP["HOST"]), Convert.ToInt32(CONFIGURATION_TCP["PORT"]));
+					CONFIGURATION_TCP = CONFIGURATION["tcp"] as Dictionary<string, object>;
+					CONFIGURATION_PAYLOAD_TYPE = CONFIGURATION["payload_type"] as Dictionary<string, object>;
+					client = Connect(Convert.ToString(CONFIGURATION_TCP["host"]), Convert.ToInt32(CONFIGURATION_TCP["port"]));
 
 					if (TrainModel)
 					{
@@ -107,20 +107,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 				for (int i = 0; i < n; i++)
 				{
 					var row = new {
-						Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_ROW"]),
-						Time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
-						Volume = bars.Bars.GetVolume(i),
-						Open = bars.Bars.GetOpen(i),
-						High = bars.Bars.GetHigh(i),
-						Low = bars.Bars.GetLow(i),
-						Close = bars.Bars.GetClose(i),
+						type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["train_row"]),
+						time =  ((DateTimeOffset)bars.Bars.GetTime(i)).ToUnixTimeMilliseconds(),
+						volume = bars.Bars.GetVolume(i),
+						open = bars.Bars.GetOpen(i),
+						high = bars.Bars.GetHigh(i),
+						low = bars.Bars.GetLow(i),
+						close = bars.Bars.GetClose(i),
 					};
 					Send(client, row);
 				}
-				Send(client, new { Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_START"]), Save = SaveModel });
+				Send(client, new { type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["train_start"]), save = SaveModel });
 
 				Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-				if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["TRAIN_FINISH"]))
+				if (Convert.ToInt32(response["type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["train_finish"]))
 				{
 					TrainingFinished = true;
 					Print("[INFO] Model trained");
@@ -136,19 +136,19 @@ namespace NinjaTrader.NinjaScript.Strategies
 				Thread.Sleep(1000);
 			}
 			var row = new {
-				Type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["ROW"]),
-				Time =  ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
-				Volume = Volume[0],
-				Open = Open[0],
-				High = High[0],
-				Low = Low[0],
-				Close = Close[0]
+				type = Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["row"]),
+				time =  ((DateTimeOffset)Time[0]).ToUnixTimeMilliseconds(),
+				volume = Volume[0],
+				open = Open[0],
+				high = High[0],
+				low = Low[0],
+				close = Close[0]
 			};
 			Send(client, row);
 			Dictionary<string, object> response = Receive<Dictionary<string, object>>(client);
-			if (Convert.ToInt32(response["Type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["CLASS"]))
+			if (Convert.ToInt32(response["type"]) == Convert.ToInt32(CONFIGURATION_PAYLOAD_TYPE["prediction"]))
 			{
-				int predictionClass = Convert.ToInt32(response["Class"]);
+				int predictionClass = Convert.ToInt32(response["prediction"]);
 				if (predictionClass == 1)
 				{
 					PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Alert1.wav");
@@ -251,8 +251,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 		#region Properties
 		[NinjaScriptProperty]
 		[Display(Name="Train Model", Order=1, GroupName="Parameters")]
-		public bool TrainModel
-		{ get; set; }
+		public bool TrainModel { get; set; }
 
 		[NinjaScriptProperty]
 		[Range(1, int.MaxValue)]
@@ -261,13 +260,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		[NinjaScriptProperty]
 		[Range(0, int.MaxValue)]
-		[Display(Name="Training Samples Offset", Order=2, GroupName="Parameters")]
+		[Display(Name="Training Samples Offset", Order=3, GroupName="Parameters")]
 		public int TrainingSamplesOffset { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="Save Model", Order=3, GroupName="Parameters")]
-		public bool SaveModel
-		{ get; set; }
+		[Display(Name="Save Model", Order=4, GroupName="Parameters")]
+		public bool SaveModel { get; set; }
 		#endregion
 	}
 }

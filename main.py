@@ -4,9 +4,6 @@ from types import SimpleNamespace
 from threading import Thread
 from time import sleep
 
-CONFIG_PATH = './config.json'
-CONFIG = None
-
 def main():
     try:
         while True:
@@ -21,7 +18,7 @@ def load_configuration(file_path: str) -> SimpleNamespace:
         return json.load(f, object_hook=lambda x: SimpleNamespace(**x))
 
 if __name__ == '__main__':
-    CONFIG = load_configuration(CONFIG_PATH)
-    server_thread = Thread(target=server.main, args=(CONFIG,), daemon=True)
+    config = load_configuration('./config.json')
+    server_thread = Thread(target=server.main, args=(config,), daemon=True)
     server_thread.start()
     main()

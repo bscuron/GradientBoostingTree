@@ -1,14 +1,14 @@
 {
-	"PAYLOAD_TYPE": {
-		"TRAIN_START": 0,
-		"TRAIN_ROW": 1,
-		"TRAIN_FINISH": 2,
-		"ROW": 3,
-		"CLASS": 4
+	"payload_type": {
+		"train_start": 0,
+		"train_row": 1,
+		"train_finish": 2,
+		"row": 3,
+		"prediction": 4
 	},
-	"TCP": {
-		"HOST": "127.0.0.1",
-		"PORT": 9000,
-		"HEADER_FORMAT": "!I"
+	"tcp": {
+		"host": "127.0.0.1",
+		"port": 9000,
+		"header_format": "!I"
 	}
 }
